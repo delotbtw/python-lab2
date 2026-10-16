@@ -1,12 +1,15 @@
+import csv
+import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime
 
-from streamstats.core import EventsLevels
+from streamstats.core import REQUIRED_FIELDS, EventsLevels
 from streamstats.errors import (
     InvalidEventError,
     InvalidTimestampError,
     StreamStatsError,
+    error_position,
 )
 from streamstats.models import Event
 
@@ -48,3 +51,56 @@ class BaseParser(ABC):
         if self.on_skip is None:
             raise error
         self.on_skip(source_name, line, error)
+
+
+class JsonlParser(BaseParser):
+    def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]:
+        for line_no, raw in enumerate(lines, start=1):
+            try:
+                with error_position(path=source_name, line=line_no):
+                    try:
+                        record = json.loads(raw)
+                    except json.JSONDecodeError as e:
+                        raise InvalidEventError(message="expected JSON object") from e
+
+                    if not isinstance(record, dict):
+                        raise InvalidEventError(message="invalid JSON")
+
+                    event = self._build_event(record)
+
+            except StreamStatsError as e:
+                self._handle_error(source_name=source_name, line=line_no, error=e)
+                continue
+
+            yield event
+
+
+class CSVParser(BaseParser):
+    def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]:
+        reader = csv.DictReader(lines)
+        with error_position(source_name, 1):
+            field_names = reader.fieldnames
+
+            if field_names is None:
+                return
+            missing = REQUIRED_FIELDS - set(field_names)
+            if missing:
+                raise InvalidEventError(
+                    message=f"missing columns: {', '.join(sorted(missing))}"
+                )
+
+        for row in reader:
+            try:
+                with error_position(source_name, reader.line_num):
+                    if None in row:
+                        raise InvalidEventError(message="too many values")
+                    if None in row.values():
+                        raise InvalidEventError(message="too few values")
+                    event = self._build_event(record=row)
+            except StreamStatsError as e:
+                self._handle_error(
+                    source_name=source_name, line=reader.line_num, error=e
+                )
+                continue
+
+            yield event

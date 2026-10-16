@@ -17,8 +17,10 @@ class Event:
             raise InvalidEventError(message=f"invalid event level: {self.level}")
         if not isinstance(self.timestamp, datetime):
             raise InvalidTimestampError(value=str(self.timestamp))
-        if not self.source.strip():
-            raise InvalidEventError(message="empty source")
+        if not isinstance(self.source, str) or not self.source.strip():
+            raise InvalidEventError(message="empty or invalid source")
+        if not isinstance(self.message, str):
+            raise InvalidEventError(message="invalid message")
 
 
 @dataclass
