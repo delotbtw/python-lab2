@@ -21,13 +21,3 @@ class Event:
             raise InvalidEventError(message="empty or invalid source")
         if not isinstance(self.message, str):
             raise InvalidEventError(message="invalid message")
-
-
-@dataclass
-class AnalysisResult:
-    amount_of_events: int
-    events_by_level: dict
-    events_by_source: dict
-    top_5_source: dict
-    first_timestamp: datetime
-    last_timestamp: datetime

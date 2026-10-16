@@ -2,7 +2,7 @@ import csv
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 
 from streamstats.core import REQUIRED_FIELDS, EventsLevels
 from streamstats.errors import (
@@ -34,7 +34,12 @@ class BaseParser(ABC):
             raise InvalidEventError(message=f"missing field: {e.args[0]}") from e
 
         try:
+            # timestamp without time zone = UTC time zone
             timestamp = datetime.fromisoformat(raw_timestamp)
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=UTC)
+            else:
+                timestamp = timestamp.astimezone(UTC)
         except (ValueError, TypeError) as e:
             raise InvalidTimestampError(value=str(raw_timestamp)) from e
 
@@ -104,3 +109,6 @@ class CSVParser(BaseParser):
                 continue
 
             yield event
+
+
+PARSERS: dict[str, type[BaseParser]] = {"csv": CSVParser, "jsonl": JsonlParser}
