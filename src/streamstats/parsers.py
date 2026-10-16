@@ -2,13 +2,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime
 
-from src.streamstats.core import EventsLevels
-from src.streamstats.errors import (
+from streamstats.core import EventsLevels
+from streamstats.errors import (
     InvalidEventError,
     InvalidTimestampError,
     StreamStatsError,
 )
-from src.streamstats.models import Event
+from streamstats.models import Event
 
 # Alias to future function
 OnSkip = Callable[[str, int, StreamStatsError], None]
@@ -19,7 +19,7 @@ class BaseParser(ABC):
         self.on_skip = on_skip
 
     @abstractmethod
-    def parse(lines: Iterable[str], source_name: str) -> Iterator[Event]: ...
+    def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]: ...
 
     def _build_event(self, record: dict) -> Event:
         try:
@@ -28,7 +28,7 @@ class BaseParser(ABC):
             source = record["source"]
             message = record["message"]
         except KeyError as e:
-            raise InvalidEventError(message=f"missing field: {e.args[0]}")
+            raise InvalidEventError(message=f"missing field: {e.args[0]}") from e
 
         try:
             timestamp = datetime.fromisoformat(raw_timestamp)
