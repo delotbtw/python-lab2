@@ -11,6 +11,7 @@ from streamstats.errors import (
     StreamStatsError,
     UnsupportedFormatError,
 )
+from streamstats.filters import EventsFilters
 from streamstats.models import Event
 from streamstats.parsers import PARSERS
 
@@ -49,10 +50,16 @@ class AnalysisResult:
 class Analyzer:
     """Reads files line by line and collects statistics"""
 
-    def __init__(self, fmt: str, skip_invalid: bool = False) -> None:
+    def __init__(
+        self,
+        fmt: str,
+        skip_invalid: bool = False,
+        event_filter: EventsFilters | None = None,
+    ) -> None:
         """
         :param fmt: input format, csv or jsonl
         :param skip_invalid: skip invalid lines with a warning instead of stopping
+        :param event_filter: filters of events, all events pass if None
         :return: None
         """
         if fmt not in PARSERS:
@@ -60,6 +67,7 @@ class Analyzer:
         self.fmt = fmt
         self.parser_class = PARSERS[self.fmt]
         self.skip_invalid = skip_invalid
+        self.event_filters = event_filter or EventsFilters()
 
     def analyze(self, paths: Iterable[Path]) -> AnalysisResult:
         """
@@ -78,7 +86,9 @@ class Analyzer:
         for path in paths:
             try:
                 with open(path, encoding="utf-8", newline="") as f:
-                    for event in parser.parse(lines=f, source_name=str(path)):
+                    for event in self.event_filters.apply(
+                        events=parser.parse(lines=f, source_name=str(path))
+                    ):
                         result.add(event)
             except OSError as e:
                 raise CLIConfigurationError(f"cannot read {path}: {e.strerror}") from e

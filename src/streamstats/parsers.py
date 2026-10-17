@@ -2,9 +2,9 @@ import csv
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
-from datetime import UTC, datetime
 
-from streamstats.core import REQUIRED_FIELDS, EventsLevels
+from streamstats.constants import REQUIRED_FIELDS
+from streamstats.core import EventsLevels, to_utc
 from streamstats.errors import (
     InvalidEventError,
     InvalidTimestampError,
@@ -51,12 +51,7 @@ class BaseParser(ABC):
             raise InvalidEventError(message=f"missing field: {e.args[0]}") from e
 
         try:
-            # timestamp without time zone = UTC time zone
-            timestamp = datetime.fromisoformat(raw_timestamp)
-            if timestamp.tzinfo is None:
-                timestamp = timestamp.replace(tzinfo=UTC)
-            else:
-                timestamp = timestamp.astimezone(UTC)
+            timestamp = to_utc(raw_timestamp)
         except (ValueError, TypeError) as e:
             raise InvalidTimestampError(value=str(raw_timestamp)) from e
 

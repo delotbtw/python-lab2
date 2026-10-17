@@ -4,11 +4,13 @@ from datetime import UTC, datetime
 import pytest
 
 from streamstats.analysis import AnalysisResult, Analyzer
+from streamstats.core import EventsLevels
 from streamstats.errors import (
     CLIConfigurationError,
     InvalidEventError,
     UnsupportedFormatError,
 )
+from streamstats.filters import EventsFilters
 from tests.helpers import CSV_HEADER, csv_line, jsonl_line, write_lines
 
 EVENTS = [
@@ -150,3 +152,83 @@ def test_input_file_is_not_modified(tmp_path):
     Analyzer(fmt="jsonl", skip_invalid=True).analyze(paths=[path])
 
     assert path.read_bytes() == before
+
+
+def hour_utc(hour):
+    return datetime(year=2024, month=1, day=1, hour=hour, tzinfo=UTC)
+
+
+def test_filter_by_level_in_analyzer(tmp_path):
+    path = jsonl_file(path=tmp_path / "a.jsonl")
+    event_filter = EventsFilters(
+        levels=frozenset({EventsLevels.ERROR, EventsLevels.CRITICAL})
+    )
+
+    result = Analyzer(fmt="jsonl", event_filter=event_filter).analyze(paths=[path])
+
+    assert result.total == 3
+    assert dict(result.total_by_level) == {"ERROR": 2, "CRITICAL": 1}
+
+
+def test_filter_by_source_in_analyzer(tmp_path):
+    path = jsonl_file(path=tmp_path / "a.jsonl")
+    event_filter = EventsFilters(sources=frozenset({"c"}))
+
+    result = Analyzer(fmt="jsonl", event_filter=event_filter).analyze(paths=[path])
+
+    assert result.total == 1
+    assert dict(result.total_by_source) == {"c": 1}
+
+
+def test_filter_by_time_changes_first_and_last_timestamp(tmp_path):
+    path = jsonl_file(path=tmp_path / "a.jsonl")
+    event_filter = EventsFilters(since=hour_utc(10), until=hour_utc(12))
+
+    result = Analyzer(fmt="jsonl", event_filter=event_filter).analyze(paths=[path])
+
+    assert result.total == 2
+    assert result.first_timestamp == hour_utc(10)
+    assert result.last_timestamp == hour_utc(11)
+
+
+def test_empty_filter_does_not_change_result(tmp_path):
+    path = jsonl_file(path=tmp_path / "a.jsonl")
+
+    without_filter = Analyzer(fmt="jsonl").analyze(paths=[path])
+    with_empty_filter = Analyzer(fmt="jsonl", event_filter=EventsFilters()).analyze(
+        paths=[path]
+    )
+
+    assert without_filter == with_empty_filter
+
+
+def test_filter_is_applied_to_every_file(tmp_path):
+    first = jsonl_file(path=tmp_path / "1.jsonl", events=EVENTS[:2])
+    second = jsonl_file(path=tmp_path / "2.jsonl", events=EVENTS[2:])
+    event_filter = EventsFilters(sources=frozenset({"a", "c"}))
+
+    result = Analyzer(fmt="jsonl", event_filter=event_filter).analyze(
+        paths=[first, second]
+    )
+
+    assert dict(result.total_by_source) == {"a": 2, "c": 1}
+
+
+def test_skipped_lines_are_counted_even_if_filter_drops_everything(tmp_path):
+    path = broken_file(tmp_path=tmp_path)
+    event_filter = EventsFilters(sources=frozenset({"nobody"}))
+
+    result = Analyzer(
+        fmt="jsonl", skip_invalid=True, event_filter=event_filter
+    ).analyze(paths=[path])
+
+    assert result.total == 0
+    assert result.skipped == 1
+
+
+def test_strict_mode_raises_on_invalid_line_even_with_filter(tmp_path):
+    path = broken_file(tmp_path=tmp_path)
+    event_filter = EventsFilters(sources=frozenset({"nobody"}))
+
+    with pytest.raises(expected_exception=InvalidEventError, match=r"bad\.jsonl:2"):
+        Analyzer(fmt="jsonl", event_filter=event_filter).analyze(paths=[path])

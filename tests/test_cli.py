@@ -160,3 +160,99 @@ def test_unknown_report_format_exits_with_2(tmp_path):
     )
 
     assert result.returncode == 2
+
+
+def timed_file(tmp_path):
+    lines = [
+        jsonl_line(timestamp="2024-01-01T09:00:00", level="INFO", source="a"),
+        jsonl_line(timestamp="2024-01-01T10:00:00", level="ERROR", source="a"),
+        jsonl_line(timestamp="2024-01-01T11:00:00", level="CRITICAL", source="b"),
+        jsonl_line(timestamp="2024-01-01T12:00:00", level="DEBUG", source="b"),
+    ]
+    return write_lines(path=tmp_path / "timed.jsonl", lines=lines)
+
+
+def analyze_timed(tmp_path, *filter_args):
+    source = timed_file(tmp_path=tmp_path)
+    return run_cli(
+        args=["analyze", source, "--format", "jsonl", *filter_args],
+        cwd=tmp_path,
+    )
+
+
+def test_level_filter(tmp_path):
+    result = analyze_timed(tmp_path, "--level", "ERROR", "--level", "CRITICAL")
+
+    report = json.loads(s=result.stdout)
+    assert result.returncode == 0
+    assert report["total"] == 2
+    assert report["by_level"]["INFO"] == 0
+
+
+def test_source_filter(tmp_path):
+    result = analyze_timed(tmp_path, "--source", "b")
+
+    report = json.loads(s=result.stdout)
+    assert result.returncode == 0
+    assert report["by_source"] == {"b": 2}
+
+
+def test_time_filter(tmp_path):
+    result = analyze_timed(
+        tmp_path, "--since", "2024-01-01T10:00:00", "--until", "2024-01-01T12:00:00"
+    )
+
+    report = json.loads(s=result.stdout)
+    assert result.returncode == 0
+    assert report["total"] == 2
+    assert report["first_timestamp"] == "2024-01-01T10:00:00+00:00"
+    assert report["last_timestamp"] == "2024-01-01T11:00:00+00:00"
+
+
+def test_since_with_time_zone(tmp_path):
+    result = analyze_timed(tmp_path, "--since", "2024-01-01T14:00:00+03:00")
+
+    assert json.loads(s=result.stdout)["total"] == 2
+
+
+def test_filters_are_combined(tmp_path):
+    result = analyze_timed(
+        tmp_path, "--level", "ERROR", "--level", "CRITICAL", "--source", "b"
+    )
+
+    assert json.loads(s=result.stdout)["total"] == 1
+
+
+def test_invalid_since_exits_with_2(tmp_path):
+    result = analyze_timed(tmp_path, "--since", "not-a-date")
+
+    assert result.returncode == 2
+    assert "--since" in result.stderr
+
+
+def test_unknown_level_exits_with_2(tmp_path):
+    result = analyze_timed(tmp_path, "--level", "NOTICE")
+
+    assert result.returncode == 2
+    assert "--level" in result.stderr
+
+
+def test_since_after_until_exits_with_2(tmp_path):
+    result = analyze_timed(
+        tmp_path, "--since", "2024-01-02T00:00:00", "--until", "2024-01-01T00:00:00"
+    )
+
+    assert result.returncode == 2
+    assert "since" in result.stderr
+
+
+def test_filter_does_not_hide_invalid_line(tmp_path):
+    source = broken_file(tmp_path=tmp_path)
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--source", "nobody"],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "bad.jsonl:2" in result.stderr
