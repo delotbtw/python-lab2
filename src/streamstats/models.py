@@ -7,12 +7,18 @@ from streamstats.errors import InvalidEventError, InvalidTimestampError
 
 @dataclass(eq=True, frozen=True)
 class Event:
+    """Single event from input file"""
+
     timestamp: datetime
     level: EventsLevels
     source: str
     message: str
 
     def __post_init__(self) -> None:
+        """
+        Validate event fields
+        :return: None
+        """
         if self.level not in EventsLevels:
             raise InvalidEventError(message=f"invalid event level: {self.level}")
         if not isinstance(self.timestamp, datetime):

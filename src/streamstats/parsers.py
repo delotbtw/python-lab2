@@ -18,13 +18,30 @@ OnSkip = Callable[[str, int, StreamStatsError], None]
 
 
 class BaseParser(ABC):
+    """Base class for event parsers"""
+
     def __init__(self, on_skip: OnSkip | None = None) -> None:
+        """
+        :param on_skip: called for every skipped invalid line, None means strict mode
+        :return: None
+        """
         self.on_skip = on_skip
 
     @abstractmethod
-    def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]: ...
+    def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]:
+        """
+        Parse lines into events one by one
+        :param lines: lines of the file
+        :param source_name: file name for error messages
+        :return: iterator of events
+        """
 
     def _build_event(self, record: dict) -> Event:
+        """
+        Build event from raw fields, timestamp is converted to UTC
+        :param record: raw fields of one line
+        :return: event
+        """
         try:
             raw_timestamp = record["timestamp"]
             raw_level = record["level"]
@@ -53,13 +70,28 @@ class BaseParser(ABC):
     def _handle_error(
         self, source_name: str, line: int, error: StreamStatsError
     ) -> None:
+        """
+        Raise the error in strict mode, otherwise pass it to on_skip
+        :param source_name: file name
+        :param line: line number
+        :param error: error of the line
+        :return: None
+        """
         if self.on_skip is None:
             raise error
         self.on_skip(source_name, line, error)
 
 
 class JsonlParser(BaseParser):
+    """Parser for JSON Lines, one JSON object per line"""
+
     def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]:
+        """
+        Parse JSONL, empty line is an invalid line
+        :param lines: lines of the file
+        :param source_name: file name for error messages
+        :return: iterator of events
+        """
         for line_no, raw in enumerate(lines, start=1):
             try:
                 with error_position(path=source_name, line=line_no):
@@ -81,7 +113,16 @@ class JsonlParser(BaseParser):
 
 
 class CSVParser(BaseParser):
+    """Parser for CSV with header"""
+
     def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]:
+        """
+        Parse CSV, header is checked once, missing column stops processing
+        even in skip mode, empty lines are ignored by csv module
+        :param lines: lines of the file
+        :param source_name: file name for error messages
+        :return: iterator of events
+        """
         reader = csv.DictReader(lines)
         with error_position(source_name, 1):
             field_names = reader.fieldnames

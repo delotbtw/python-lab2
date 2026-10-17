@@ -11,6 +11,10 @@ from streamstats.report import Report
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    CLI argument parser
+    :return: parsed arguments
+    """
     parser = argparse.ArgumentParser(
         prog="streamstats",
         description="Streaming statistics for CSV and JSONL event files.",
@@ -32,6 +36,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """
+    Entry point
+    :return: exit code, EXIT_ERROR if processing stopped by an error
+    """
     logging.basicConfig(format="%(levelname)s: %(message)s")
     args = parse_args()
 
