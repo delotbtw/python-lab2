@@ -1,0 +1,3 @@
+TOP_N = 5
+EXIT_OK = 0
+EXIT_ERROR = 2

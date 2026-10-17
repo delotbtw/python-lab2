@@ -396,3 +396,8 @@ cython_debug/
 # Editor-based Rest Client
 
 # Android studio 3.1+ serialized cache file
+
+# Garbage
+.gitignore
+requirements.txt 
+.pre-commit-config.yaml

@@ -66,10 +66,10 @@ class JsonlParser(BaseParser):
                     try:
                         record = json.loads(raw)
                     except json.JSONDecodeError as e:
-                        raise InvalidEventError(message="expected JSON object") from e
+                        raise InvalidEventError(message="invalid JSON") from e
 
                     if not isinstance(record, dict):
-                        raise InvalidEventError(message="invalid JSON")
+                        raise InvalidEventError(message="expected JSON object")
 
                     event = self._build_event(record)
 
