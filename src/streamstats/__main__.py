@@ -7,7 +7,7 @@ from streamstats.analysis import Analyzer
 from streamstats.constants import EXIT_ERROR, EXIT_OK
 from streamstats.errors import StreamStatsError
 from streamstats.parsers import PARSERS
-from streamstats.report import Report
+from streamstats.report import REPORT_FORMATS, Report
 
 
 def parse_args() -> argparse.Namespace:
@@ -28,6 +28,12 @@ def parse_args() -> argparse.Namespace:
     analyze.add_argument("--format", required=True, choices=sorted(PARSERS))
     analyze.add_argument("--output", type=Path, help="report file (default: stdout)")
     analyze.add_argument(
+        "--report-format",
+        choices=REPORT_FORMATS,
+        default="json",
+        help="report format (default: json)",
+    )
+    analyze.add_argument(
         "--skip-invalid",
         action="store_true",
         help="skip invalid lines with a warning instead of stopping",
@@ -47,9 +53,9 @@ def main() -> int:
         result = Analyzer(args.format, args.skip_invalid).analyze(args.inputs)
         report = Report(result)
         if args.output is None:
-            print(report.to_json())
+            print(report.render(args.report_format).rstrip("\n"))
         else:
-            report.write(args.output)
+            report.write(args.output, args.report_format)
     except StreamStatsError as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_ERROR

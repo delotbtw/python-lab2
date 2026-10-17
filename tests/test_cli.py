@@ -111,3 +111,52 @@ def test_input_file_is_not_modified(tmp_path):
     )
 
     assert source.read_bytes() == before
+
+
+def test_csv_report_to_file(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+    output = tmp_path / "report.csv"
+
+    result = run_cli(
+        args=[
+            "analyze",
+            source,
+            "--format",
+            "jsonl",
+            "--report-format",
+            "csv",
+            "--output",
+            output,
+        ],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0
+    lines = output.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "section,key,value"
+    assert "total,,2" in lines
+    assert "top_error_source,сервис,1" in lines
+
+
+def test_csv_report_to_stdout(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--report-format", "csv"],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.splitlines()[0] == "section,key,value"
+    assert not result.stdout.endswith("\n\n")
+
+
+def test_unknown_report_format_exits_with_2(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--report-format", "xml"],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2

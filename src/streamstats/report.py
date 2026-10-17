@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from collections import Counter
 from pathlib import Path
@@ -5,6 +7,9 @@ from pathlib import Path
 from streamstats.analysis import AnalysisResult
 from streamstats.constants import TOP_N
 from streamstats.core import EventsLevels
+from streamstats.errors import UnsupportedFormatError
+
+REPORT_FORMATS = ("json", "csv")
 
 
 def get_top_n(errors_by_source: Counter, n: int) -> list[dict]:
@@ -64,11 +69,46 @@ class Report:
         """
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
-    def write(self, path: Path) -> None:
+    def to_csv(self) -> str:
+        """
+        Report as CSV table with columns section, key, value.
+        It is built from to_dict, so nothing is calculated twice
+        :return: CSV string
+        """
+        data = self.to_dict()
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow(["section", "key", "value"])
+        writer.writerow(["total", "", data["total"]])
+        writer.writerow(["skipped", "", data["skipped"]])
+        for level, amount in data["by_level"].items():
+            writer.writerow(["level", level, amount])
+        for source, amount in data["by_source"].items():
+            writer.writerow(["source", source, amount])
+        for item in data["top_error_sources"]:
+            writer.writerow(["top_error_source", item["source"], item["count"]])
+        writer.writerow(["first_timestamp", "", data["first_timestamp"]])
+        writer.writerow(["last_timestamp", "", data["last_timestamp"]])
+        return buffer.getvalue()
+
+    def render(self, fmt: str) -> str:
+        """
+        Report in the given format
+        :param fmt: report format, json or csv
+        :return: report text
+        """
+        if fmt not in REPORT_FORMATS:
+            raise UnsupportedFormatError(fmt=fmt)
+        if fmt == "csv":
+            return self.to_csv()
+        return self.to_json()
+
+    def write(self, path: Path, fmt: str = "json") -> None:
         """
         Write report to file
         :param path: report file
+        :param fmt: report format, json or csv
         :return: None
         """
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(self.to_json())
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(self.render(fmt=fmt))
