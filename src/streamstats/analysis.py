@@ -23,9 +23,9 @@ class AnalysisResult:
     """Statistics of all processed files"""
 
     total: int = 0
-    total_by_level: Counter = field(default_factory=Counter)
-    total_by_source: Counter = field(default_factory=Counter)
-    errors_by_source: Counter = field(default_factory=Counter)
+    total_by_level: Counter[str] = field(default_factory=Counter)
+    total_by_source: Counter[str] = field(default_factory=Counter)
+    errors_by_source: Counter[str] = field(default_factory=Counter)
     first_timestamp: datetime | None = None
     last_timestamp: datetime | None = None
     skipped: int = 0

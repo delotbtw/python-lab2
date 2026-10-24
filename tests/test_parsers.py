@@ -202,3 +202,32 @@ def test_skip_mode_csv():
 
     assert len(events) == 2
     assert skipped == [3]
+
+
+def test_csv_empty_line_is_invalid():
+    lines = [CSV_HEADER, csv_line(), "", csv_line()]
+
+    with pytest.raises(
+        expected_exception=InvalidEventError, match=r"data\.csv:3: empty line"
+    ):
+        list(CSVParser().parse(lines=lines, source_name="data.csv"))
+
+
+def test_csv_empty_line_in_skip_mode():
+    skipped = []
+    parser = CSVParser(on_skip=lambda file, line, error: skipped.append(line))
+    lines = [CSV_HEADER, csv_line(), "", csv_line()]
+
+    events = list(parser.parse(lines=lines, source_name="f"))
+
+    assert len(events) == 2
+    assert skipped == [3]
+
+
+def test_jsonl_empty_line_is_invalid_too():
+    lines = [jsonl_line(), "", jsonl_line()]
+
+    with pytest.raises(
+        expected_exception=InvalidEventError, match=r"data\.jsonl:2: invalid JSON"
+    ):
+        list(JsonlParser().parse(lines=lines, source_name="data.jsonl"))

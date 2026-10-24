@@ -3,6 +3,7 @@ import io
 import json
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from streamstats.analysis import AnalysisResult
 from streamstats.constants import TOP_N
@@ -12,7 +13,7 @@ from streamstats.errors import UnsupportedFormatError
 REPORT_FORMATS = ("json", "csv")
 
 
-def get_top_n(errors_by_source: Counter, n: int) -> list[dict]:
+def get_top_n(errors_by_source: Counter[str], n: int) -> list[dict[str, Any]]:
     """
     Top of sources by errors, sources with equal count are sorted by name
     :param errors_by_source: errors count per source
@@ -39,12 +40,12 @@ class Report:
         self.result = result
         self.top_n = top_n
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """
         Build report as a dict, all levels are present even with zero count
         :return: report
         """
-        dict_result = {}
+        dict_result: dict[str, Any] = {}
         dict_result["total"] = self.result.total
         dict_result["skipped"] = self.result.skipped
 

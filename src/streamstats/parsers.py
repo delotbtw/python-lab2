@@ -2,10 +2,12 @@ import csv
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Iterator
+from typing import Any
 
 from streamstats.constants import REQUIRED_FIELDS
 from streamstats.core import EventsLevels, to_utc
 from streamstats.errors import (
+    CLIConfigurationError,
     InvalidEventError,
     InvalidTimestampError,
     StreamStatsError,
@@ -36,7 +38,7 @@ class BaseParser(ABC):
         :return: iterator of events
         """
 
-    def _build_event(self, record: dict) -> Event:
+    def _build_event(self, record: dict[str, Any]) -> Event:
         """
         Build event from raw fields, timestamp is converted to UTC
         :param record: raw fields of one line
@@ -77,6 +79,31 @@ class BaseParser(ABC):
         self.on_skip(source_name, line, error)
 
 
+PARSERS: dict[str, type[BaseParser]] = {}
+
+
+def register_parser(name: str) -> Callable[[type[BaseParser]], type[BaseParser]]:
+    """
+    Decorator. It adds a parser class to PARSERS under the format name,
+    so the format can be used in --format and in Analyzer
+    :param name: format name
+    :return: decorator, it returns the class unchanged
+    """
+
+    def decorator(parser_class: type[BaseParser]) -> type[BaseParser]:
+        if not (
+            isinstance(parser_class, type) and issubclass(parser_class, BaseParser)
+        ):
+            raise TypeError(f"{parser_class!r} is not a BaseParser subclass")
+        if name in PARSERS:
+            raise CLIConfigurationError(reason=f"parser {name!r} is already registered")
+        PARSERS[name] = parser_class
+        return parser_class
+
+    return decorator
+
+
+@register_parser(name="jsonl")
 class JsonlParser(BaseParser):
     """Parser for JSON Lines, one JSON object per line"""
 
@@ -107,24 +134,24 @@ class JsonlParser(BaseParser):
             yield event
 
 
+@register_parser(name="csv")
 class CSVParser(BaseParser):
     """Parser for CSV with header"""
 
     def parse(self, lines: Iterable[str], source_name: str) -> Iterator[Event]:
         """
         Parse CSV, header is checked once, missing column stops processing
-        even in skip mode, empty lines are ignored by csv module
+        even in skip mode, empty line is an invalid line
         :param lines: lines of the file
         :param source_name: file name for error messages
         :return: iterator of events
         """
-        reader = csv.DictReader(lines)
-        with error_position(source_name, 1):
-            field_names = reader.fieldnames
-
-            if field_names is None:
-                return
-            missing = REQUIRED_FIELDS - set(field_names)
+        reader = csv.reader(lines)
+        header = next(reader, None)
+        if header is None:
+            return
+        with error_position(source_name, reader.line_num):
+            missing = REQUIRED_FIELDS - set(header)
             if missing:
                 raise InvalidEventError(
                     message=f"missing columns: {', '.join(sorted(missing))}"
@@ -133,11 +160,15 @@ class CSVParser(BaseParser):
         for row in reader:
             try:
                 with error_position(source_name, reader.line_num):
-                    if None in row:
+                    if not row:
+                        raise InvalidEventError(message="empty line")
+                    if len(row) > len(header):
                         raise InvalidEventError(message="too many values")
-                    if None in row.values():
+                    if len(row) < len(header):
                         raise InvalidEventError(message="too few values")
-                    event = self._build_event(record=row)
+                    event = self._build_event(
+                        record=dict(zip(header, row, strict=True))
+                    )
             except StreamStatsError as e:
                 self._handle_error(
                     source_name=source_name, line=reader.line_num, error=e
@@ -145,6 +176,3 @@ class CSVParser(BaseParser):
                 continue
 
             yield event
-
-
-PARSERS: dict[str, type[BaseParser]] = {"csv": CSVParser, "jsonl": JsonlParser}

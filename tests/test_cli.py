@@ -256,3 +256,74 @@ def test_filter_does_not_hide_invalid_line(tmp_path):
 
     assert result.returncode == 2
     assert "bad.jsonl:2" in result.stderr
+
+
+def test_since_equal_to_until_exits_with_2(tmp_path):
+    result = analyze_timed(
+        tmp_path, "--since", "2024-01-01T10:00:00", "--until", "2024-01-01T10:00:00"
+    )
+
+    assert result.returncode == 2
+    assert "since" in result.stderr
+
+
+PLUGIN = """
+from streamstats.parsers import BaseParser, register_parser
+
+
+@register_parser(name="plain")
+class PlainParser(BaseParser):
+    def parse(self, lines, source_name):
+        for raw in lines:
+            level, source, message = raw.split(maxsplit=2)
+            yield self._build_event(
+                record={
+                    "timestamp": "2024-01-01T10:00:00",
+                    "level": level,
+                    "source": source,
+                    "message": message,
+                }
+            )
+"""
+
+
+def plain_files(tmp_path):
+    (tmp_path / "plain_plugin.py").write_text(data=PLUGIN, encoding="utf-8")
+    return write_lines(
+        path=tmp_path / "events.log", lines=["ERROR db disk full", "INFO web ok"]
+    )
+
+
+def test_plugin_adds_new_format(tmp_path):
+    source = plain_files(tmp_path=tmp_path)
+
+    result = run_cli(
+        args=["analyze", source, "--format", "plain", "--plugin", "plain_plugin"],
+        cwd=tmp_path,
+    )
+
+    report = json.loads(s=result.stdout)
+    assert result.returncode == 0
+    assert report["total"] == 2
+    assert report["top_error_sources"] == [{"source": "db", "count": 1}]
+
+
+def test_format_is_unknown_without_plugin(tmp_path):
+    source = plain_files(tmp_path=tmp_path)
+
+    result = run_cli(args=["analyze", source, "--format", "plain"], cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert "--format" in result.stderr
+
+
+def test_missing_plugin_exits_with_2(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--plugin", "no_such_plugin"],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "no_such_plugin" in result.stderr

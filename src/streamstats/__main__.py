@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import logging
 import sys
 from pathlib import Path
@@ -10,6 +11,26 @@ from streamstats.errors import CLIConfigurationError, StreamStatsError
 from streamstats.filters import EventsFilters
 from streamstats.parsers import PARSERS
 from streamstats.report import REPORT_FORMATS, Report
+
+
+def load_plugins(argv: list[str] | None = None) -> None:
+    """
+    Import modules from --plugin, they register their parsers on import.
+    It runs before the main parser is built, because choices of --format
+    depend on registered parsers
+    :param argv: CLI arguments, sys.argv if None
+    :return: None
+    """
+    pre_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    pre_parser.add_argument("--plugin", action="append", default=[])
+    known, _ = pre_parser.parse_known_args(argv)
+    for module in known.plugin:
+        try:
+            importlib.import_module(module)
+        except ImportError as e:
+            raise CLIConfigurationError(
+                reason=f"cannot import plugin {module}: {e}"
+            ) from e
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,9 +62,16 @@ def parse_args() -> argparse.Namespace:
         help="skip invalid lines with a warning instead of stopping",
     )
 
+    analyze.add_argument(
+        "--plugin",
+        action="append",
+        metavar="MODULE",
+        help="module that registers extra parsers, can be repeated",
+    )
+
     # filters
     analyze.add_argument(
-        "--level", action="append", choices=[l.value for l in EventsLevels]
+        "--level", action="append", choices=[level.value for level in EventsLevels]
     )
     analyze.add_argument("--source", action="append")
     analyze.add_argument("--since", type=to_utc)
@@ -58,15 +86,16 @@ def main() -> int:
     :return: exit code, EXIT_ERROR if processing stopped by an error
     """
     logging.basicConfig(format="%(levelname)s: %(message)s")
-    args = parse_args()
 
     try:
+        load_plugins()
+        args = parse_args()
         if (
             args.since is not None
             and args.until is not None
-            and args.since > args.until
+            and args.since >= args.until
         ):
-            raise CLIConfigurationError(reason="since timestamp > until timestamp")
+            raise CLIConfigurationError(reason="since must be earlier than until")
         levels = (
             frozenset(EventsLevels(v) for v in args.level)
             if args.level is not None
