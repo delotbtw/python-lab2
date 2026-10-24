@@ -231,3 +231,41 @@ def test_jsonl_empty_line_is_invalid_too():
         expected_exception=InvalidEventError, match=r"data\.jsonl:2: invalid JSON"
     ):
         list(JsonlParser().parse(lines=lines, source_name="data.jsonl"))
+
+
+def test_timestamp_out_of_range_is_invalid_timestamp():
+    lines = [jsonl_line(timestamp="0001-01-01T00:00:00+05:00")]
+
+    with pytest.raises(
+        expected_exception=InvalidTimestampError, match=r"data\.jsonl:1:"
+    ):
+        list(JsonlParser().parse(lines=lines, source_name="data.jsonl"))
+
+
+def test_deeply_nested_json_is_invalid_json():
+    lines = ["[" * 100_000 + "]" * 100_000]
+
+    with pytest.raises(
+        expected_exception=InvalidEventError, match=r"data\.jsonl:1: invalid JSON"
+    ):
+        list(JsonlParser().parse(lines=lines, source_name="data.jsonl"))
+
+
+def test_csv_field_over_the_limit_is_invalid_line():
+    lines = [CSV_HEADER, csv_line(), csv_line(message="x" * 200_000), csv_line()]
+
+    with pytest.raises(
+        expected_exception=InvalidEventError, match=r"data\.csv:3: invalid CSV"
+    ):
+        list(CSVParser().parse(lines=lines, source_name="data.csv"))
+
+
+def test_csv_field_over_the_limit_in_skip_mode():
+    skipped = []
+    parser = CSVParser(on_skip=lambda file, line, error: skipped.append(line))
+    lines = [CSV_HEADER, csv_line(), csv_line(message="x" * 200_000), csv_line()]
+
+    events = list(parser.parse(lines=lines, source_name="f"))
+
+    assert len(events) == 2
+    assert skipped == [3]

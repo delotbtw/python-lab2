@@ -232,3 +232,18 @@ def test_strict_mode_raises_on_invalid_line_even_with_filter(tmp_path):
 
     with pytest.raises(expected_exception=InvalidEventError, match=r"bad\.jsonl:2"):
         Analyzer(fmt="jsonl", event_filter=event_filter).analyze(paths=[path])
+
+
+def test_utf8_bom_is_ignored(tmp_path):
+    jsonl_path = tmp_path / "bom.jsonl"
+    csv_path = tmp_path / "bom.csv"
+    jsonl_path.write_bytes(data=b"\xef\xbb\xbf" + jsonl_line().encode("utf-8") + b"\n")
+    csv_path.write_bytes(
+        data=b"\xef\xbb\xbf" + (CSV_HEADER + "\n" + csv_line() + "\n").encode("utf-8")
+    )
+
+    from_jsonl = Analyzer(fmt="jsonl").analyze(paths=[jsonl_path])
+    from_csv = Analyzer(fmt="csv").analyze(paths=[csv_path])
+
+    assert from_jsonl.total == 1
+    assert from_csv.total == 1

@@ -85,7 +85,7 @@ class Analyzer:
         parser = self.parser_class(on_skip if self.skip_invalid else None)
         for path in paths:
             try:
-                with open(path, encoding="utf-8", newline="") as f:
+                with open(path, encoding="utf-8-sig", newline="") as f:
                     for event in self.event_filters.apply(
                         events=parser.parse(lines=f, source_name=str(path))
                     ):

@@ -119,7 +119,7 @@ class JsonlParser(BaseParser):
                 with error_position(path=source_name, line=line_no):
                     try:
                         record = json.loads(raw)
-                    except json.JSONDecodeError as e:
+                    except (json.JSONDecodeError, RecursionError) as e:
                         raise InvalidEventError(message="invalid JSON") from e
 
                     if not isinstance(record, dict):
@@ -157,8 +157,15 @@ class CSVParser(BaseParser):
                     message=f"missing columns: {', '.join(sorted(missing))}"
                 )
 
-        for row in reader:
+        while True:
             try:
+                try:
+                    row = next(reader)
+                except StopIteration:
+                    return
+                except csv.Error as e:
+                    with error_position(source_name, reader.line_num):
+                        raise InvalidEventError(message=f"invalid CSV: {e}") from e
                 with error_position(source_name, reader.line_num):
                     if not row:
                         raise InvalidEventError(message="empty line")

@@ -9,12 +9,13 @@ def to_utc(dt: str) -> datetime:
     :param dt: timestamp string
     :return: timezone-aware datetime in UTC
     """
-    timestamp = datetime.fromisoformat(dt)
-    if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=UTC)
-    else:
-        timestamp = timestamp.astimezone(UTC)
-    return timestamp
+    try:
+        timestamp = datetime.fromisoformat(dt)
+        if timestamp.tzinfo is None:
+            return timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(UTC)
+    except OverflowError as e:
+        raise ValueError(f"timestamp is out of range: {dt}") from e
 
 
 class EventsLevels(StrEnum):

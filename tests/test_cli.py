@@ -327,3 +327,57 @@ def test_missing_plugin_exits_with_2(tmp_path):
 
     assert result.returncode == 2
     assert "no_such_plugin" in result.stderr
+
+
+def test_output_cannot_be_an_input_file(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+    before = source.read_bytes()
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--output", source],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "--output" in result.stderr
+    assert source.read_bytes() == before
+
+
+def test_level_is_case_insensitive(tmp_path):
+    result = analyze_timed(tmp_path, "--level", "error")
+
+    assert result.returncode == 0
+    assert json.loads(s=result.stdout)["total"] == 1
+
+
+def test_since_out_of_range_exits_with_2(tmp_path):
+    result = analyze_timed(tmp_path, "--since", "0001-01-01T00:00:00+05:00")
+
+    assert result.returncode == 2
+    assert "--since" in result.stderr
+
+
+def test_empty_plugin_name_exits_with_2(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--plugin", ""],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
+
+
+def test_plugin_with_syntax_error_exits_with_2(tmp_path):
+    source = good_file(tmp_path=tmp_path)
+    (tmp_path / "broken_plugin.py").write_text(data="def (:\n", encoding="utf-8")
+
+    result = run_cli(
+        args=["analyze", source, "--format", "jsonl", "--plugin", "broken_plugin"],
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "broken_plugin" in result.stderr
+    assert "Traceback" not in result.stderr

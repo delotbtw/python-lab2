@@ -13,6 +13,9 @@ build-backend = "hatchling.build"
 pythonpath = ["src"]
 testpaths = ["tests"]
 
+[tool.ruff]
+extend-exclude = ["demo"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.2",

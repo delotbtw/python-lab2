@@ -27,7 +27,7 @@ def load_plugins(argv: list[str] | None = None) -> None:
     for module in known.plugin:
         try:
             importlib.import_module(module)
-        except ImportError as e:
+        except (ImportError, ValueError, TypeError, SyntaxError) as e:
             raise CLIConfigurationError(
                 reason=f"cannot import plugin {module}: {e}"
             ) from e
@@ -71,7 +71,10 @@ def parse_args() -> argparse.Namespace:
 
     # filters
     analyze.add_argument(
-        "--level", action="append", choices=[level.value for level in EventsLevels]
+        "--level",
+        action="append",
+        type=str.upper,
+        choices=[level.value for level in EventsLevels],
     )
     analyze.add_argument("--source", action="append")
     analyze.add_argument("--since", type=to_utc)
@@ -96,6 +99,10 @@ def main() -> int:
             and args.since >= args.until
         ):
             raise CLIConfigurationError(reason="since must be earlier than until")
+        if args.output is not None and args.output.resolve() in {
+            path.resolve() for path in args.inputs
+        }:
+            raise CLIConfigurationError(reason="--output must not be an input file")
         levels = (
             frozenset(EventsLevels(v) for v in args.level)
             if args.level is not None

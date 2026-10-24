@@ -126,3 +126,8 @@ def test_to_utc_z_suffix():
 def test_to_utc_invalid_string():
     with pytest.raises(expected_exception=ValueError):
         to_utc(dt="not-a-date")
+
+
+def test_to_utc_out_of_range():
+    with pytest.raises(expected_exception=ValueError, match="out of range"):
+        to_utc(dt="0001-01-01T00:00:00+05:00")
