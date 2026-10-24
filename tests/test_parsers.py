@@ -110,7 +110,7 @@ def test_invalid_json_reports_line_7():
     argvalues=[
         "[1, 2]",
         '{"timestamp": "2024-01-01T10:00:00"}',
-        jsonl_line(level="NOTICE"),
+        jsonl_line(level="TRACE"),
         jsonl_line(source=""),
         jsonl_line(source=None),
         jsonl_line(message=123),

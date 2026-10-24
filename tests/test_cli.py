@@ -231,7 +231,7 @@ def test_invalid_since_exits_with_2(tmp_path):
 
 
 def test_unknown_level_exits_with_2(tmp_path):
-    result = analyze_timed(tmp_path, "--level", "NOTICE")
+    result = analyze_timed(tmp_path, "--level", "TRACE")
 
     assert result.returncode == 2
     assert "--level" in result.stderr
